@@ -1,0 +1,7 @@
+
+# Uninstall dlms module
+npm uninstall dlms-base
+
+# Install new dlms module
+cp ../../../discoverfinancial/dlms-server/base/dlms-base-2.0.1.tgz .
+npm install dlms-base-2.0.1.tgz
