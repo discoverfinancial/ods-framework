@@ -128,7 +128,7 @@ export function getBasePurl(purl: string) {
  */
 export function compareVersions(v1: string, v2: string, onlyCompareDigits=false) {
     if ((v1 == undefined || !v1) && (v2 == undefined && !v2)) return 0;
-    if (v1 == undefined || !v2 ) return -1;
+    if (v1 == undefined || !v1 ) return -1;
     if (v2 == undefined || !v2) return 1;
     const parts1 = v1.split(".");
     const parts2 = v2.split(".");
