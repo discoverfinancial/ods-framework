@@ -34,6 +34,8 @@ export function setDEBUG(b: boolean) {
 export function isDEBUG() {
     return DEBUG;
 }
+
+/*
 var readline = require('readline');
 var rl = readline.createInterface(process.stdin, process.stdout);
 export function stopExecution(prompt: string) {
@@ -44,6 +46,7 @@ export function stopExecution(prompt: string) {
         rl.question(`\n\n---> ${prompt}`, (input:string) => resolve(input));
     });
 }
+*/
 
 const sleep = (delay:number) => new Promise((resolve) => setTimeout(resolve, delay))
 

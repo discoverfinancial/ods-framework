@@ -9,7 +9,8 @@
     "build-local": "npm config set strict-ssl false && npm_config_tarball=$INIT_CWD/node-v20.19.2-headers.tar.gz NODE_TLS_REJECT_UNAUTHORIZED=0 npm install --loglevel verbose && npm run fix-cdxgen && echo 'calling tsoa' && tsoa spec-and-routes && echo 'calling tsc' && tsc && echo 'tsc done' && cp ./src/adminSandboxFunctions.js ./build && npm pack .",
     "fix-cdxgen": "cp scripts/index.d.ts node_modules/@cyclonedx/cdxgen/types",
     "prepare": "ts-patch install",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --watchAll=false --coverage",
+    "test-no-coverage": "jest",
     "package": "npm pack .",
     "lint": "npx eslint src",
     "lint:fix": "npx eslint . --fix"
