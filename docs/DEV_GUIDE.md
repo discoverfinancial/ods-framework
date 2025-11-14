@@ -55,7 +55,7 @@ To build the ods-framework package
 cd ods-framework/code 
 
 # If ods-common was changed, then this script updates ods-framework to use it
-./reimport
+./reimport-ods
 
 # build ods-framework
 npm run build
