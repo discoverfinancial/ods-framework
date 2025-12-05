@@ -1,0 +1,10 @@
+
+# Uninstall dlms modules
+npm uninstall dlms-server dlms-base
+# npm uninstall dlms-server
+
+# Install new dlms modules
+cp ../../../dlms-server/base/dlms-base-2.0.2.tgz .
+cp ../../../dlms-server/server/dlms-server-2.0.2.tgz .
+npm install dlms-base-2.0.2.tgz
+npm install dlms-server-2.0.2.tgz

@@ -1,0 +1,69 @@
+{
+  "name": "ods-framework",
+  "version": "1.0.0",
+  "description": "ODS Framework Library",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "clean": "rm -rf ./build && rm -rf ./node_modules",
+    "build": "npm config set strict-ssl false && NODE_TLS_REJECT_UNAUTHORIZED=0 npm install --loglevel verbose && echo 'calling tsoa' && tsoa spec-and-routes && echo 'calling tsc' && tsc && echo 'tsc done' && cp ./src/adminSandboxFunctions.js ./build && npm pack .",
+    "build-local": "npm config set strict-ssl false && npm_config_tarball=$INIT_CWD/node-v22.19.0-headers.tar.gz NODE_TLS_REJECT_UNAUTHORIZED=0 npm install --loglevel verbose && npm run fix-cdxgen && echo 'calling tsoa' && tsoa spec-and-routes && echo 'calling tsc' && tsc && echo 'tsc done' && cp ./src/adminSandboxFunctions.js ./build && npm pack .",
+    "fix-cdxgen": "cp scripts/index.d.ts node_modules/@cyclonedx/cdxgen/types",
+    "prepare": "ts-patch install",
+    "test": "jest --watchAll=false --coverage",
+    "test-no-coverage": "jest",
+    "package": "npm pack .",
+    "lint": "npx eslint src",
+    "lint:fix": "npx eslint . --fix",
+    "check": "NODE_TLS_REJECT_UNAUTHORIZED=0 npm-check"
+  },
+  "contributors": [
+    "Bryce Curtis <BryceCurtis@discover.com>"
+  ],
+  "license": "MIT",
+  "overrides": {
+    "jsonwebtoken": "9.0.2",
+    "node": "22.19.0"
+  },
+  "dependencies": {
+    "@nrfcloud/ts-json-schema-transformer": "^3.1.1",
+    "@tsoa/runtime": "^6.6.0",
+    "@types/express": "^5.0.6",
+    "@types/global-agent": "^3.0.0",
+    "@types/node": "^24.10.1",
+    "@types/swagger-ui-express": "^4.1.3",
+    "axios": "^1.13.2",
+    "compression": "^1.8.1",
+    "croner": "^9.1.0",
+    "dlms-base": "file:dlms-base-2.0.2.tgz",
+    "dlms-server": "file:dlms-server-2.0.2.tgz",
+    "express": "^5.2.1",
+    "jsonrepair": "^3.4.1",
+    "lz-ts": "^1.1.2",
+    "mongodb": "^7.0.0",
+    "ods-common": "file:ods-common-1.0.0.tgz",
+    "swagger-ui-express": "^5.0.1",
+    "tsoa": "^6.2.1",
+    "typescript": "^5.8.2",
+    "undici": "^7.16.0",
+    "uuid": "^13.0.0",
+    "v8-sandbox": "^3.2.12"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.3",
+    "@eslint/js": "^9.39.1",
+    "@jest/expect": "^30.0.5",
+    "@jest/globals": "^30.2.0",
+    "@jest/types": "^30.2.0",
+    "@testing-library/jest-dom": "^6.6.4",
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
+    "eslint": "^9.39.1",
+    "jest-canvas-mock": "^2.5.2",
+    "jest-environment-jsdom": "^30.2.0",
+    "npm-check": "^6.0.1",
+    "ts-jest": "^29.4.6",
+    "ts-patch": "^3.3.0"
+  }
+}

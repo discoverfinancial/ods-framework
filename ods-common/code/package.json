@@ -1,0 +1,37 @@
+{
+  "name": "ods-common",
+  "version": "1.0.0",
+  "description": "ODS Framework Models Library",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "clean": "rm -rf ./build && rm -rf ./node_modules",
+    "prepublish1": "npm run build",
+    "build": "rm -rf build && npm install && tsc && npm pack .",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "package": "npm pack .",
+    "lint": "npx eslint src",
+    "lint:fix": "npx eslint . --fix",
+    "check": "NODE_TLS_REJECT_UNAUTHORIZED=0 npm-check"
+  },
+  "contributors": [
+    "Bryce Curtis <BryceCurtis@discover.com>"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^24.10.1",
+    "dlms-base": "file:dlms-base-2.0.2.tgz",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.3",
+    "@eslint/js": "^9.39.1",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
+    "eslint": "^9.39.1",
+    "npm-check": "^6.0.1"
+  },
+  "files": [
+    "build"
+  ]
+}

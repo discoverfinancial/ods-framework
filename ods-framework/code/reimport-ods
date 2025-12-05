@@ -1,0 +1,8 @@
+echo "REIMPORT-ODS"
+
+# Uninstall ods module
+npm uninstall ods-common
+
+# Install new ods module
+cp ../../ods-common/code/ods-common-1.0.0.tgz .
+npm install ods-common-1.0.0.tgz
