@@ -14,7 +14,7 @@
     "sourceMap": true,
     "plugins": [
       {
-        "transform": "@nrfcloud/ts-json-schema-transformer/dist/transform"
+        "transform": "typia/lib/transform"
       }
     ]    
   },
