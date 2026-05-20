@@ -2,7 +2,7 @@
  * Copyright (c) 2025 Capital One
 */
 
-import { assertGuard } from "@nrfcloud/ts-json-schema-transformer";
+import { assertGuard } from "typia";
 import { PostDocs, throwErr, Validate } from "dlms-server";
 import {
     ApiTokenCreate,
