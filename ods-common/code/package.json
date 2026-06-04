@@ -1,6 +1,6 @@
 {
   "name": "ods-common",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "ODS Framework Models Library",
   "main": "build/index.js",
   "types": "build/index.d.ts",
