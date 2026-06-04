@@ -271,7 +271,7 @@ export class OdsController extends Controller {
     }
 
     /**
-     * Get all notebook variables for the notebook.
+     * Get all notebook variable names.
      * @param req
      * @param notebookId - The notebook id
      * 
@@ -300,7 +300,7 @@ export class OdsController extends Controller {
     }
 
     /**
-     * Get the notebook variable snapshot names for the notebook.
+     * Get the notebook snapshot names.
      * @param req
      * @param notebookId - The notebook id
      * 
@@ -310,6 +310,37 @@ export class OdsController extends Controller {
     public async processCommand2(@Request() req: express.Request, @Path() notebookId: string): Promise<any> {
         const mgr = Ods.getInstance();
         const r = await mgr.getNotebookVarsSnapshotNames(notebookId);
+        return r;
+    }
+
+    /**
+     * Get all notebook snapshot variable names.
+     * @param req
+     * @param notebookId - The notebook id
+     * @param snapshotName - The snapshot name
+     * 
+     * @returns List of variable names.
+     */
+    @Get("notebook/getNotebookVarsSnapshotVars/{notebookId}/{snapshotName}")
+    public async getNotebookVarsSnapshotVars(@Request() req: express.Request, @Path() notebookId: string, @Path() snapshotName: string): Promise<any> {
+        const mgr = Ods.getInstance();
+        const r = await mgr.getNotebookVarsSnapshotVars(notebookId, snapshotName);
+        return r;
+    }
+
+    /**
+     * Get the notebook variable snapshot variable value.
+     * @param req
+     * @param notebookId - The notebook id
+     * @param snapshotName - The snapshot name
+     * @param name - The variable name
+     * 
+     * @returns JSON object.
+     */
+    @Get("notebook/getNotebookVarsSnapshotVar/{notebookId}/{snapshotName}/{name}")
+    public async getNotebookVarsSnapshotVar(@Request() req: express.Request, @Path() notebookId: string, @Path() snapshotName: string, @Path() name: string): Promise<any> {
+        const mgr = Ods.getInstance();
+        const r = await mgr.getNotebookVarsSnapshotVar(notebookId, snapshotName, name);
         return r;
     }
 
@@ -372,7 +403,7 @@ export class OdsController extends Controller {
     @Post("notebook/saveNotebookVarsSnapshot/{notebookId}/{snapshotName}")
     public async saveNotebookVarsSnapshot(@Request() req: express.Request, @Path() notebookId: string, @Path() snapshotName: string, @Body() body: any): Promise<any> {
         const mgr = Ods.getInstance();
-        const r = await mgr.saveNotebookVarsSnapshot(notebookId, snapshotName, body?.description || "");
+        const r = await mgr.saveNotebookVarsSnapshot(notebookId, snapshotName, body?.description || "", body?.notebook || "");
         return r;
     }
 
