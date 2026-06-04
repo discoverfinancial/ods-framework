@@ -1,6 +1,6 @@
 {
   "name": "ods-framework",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "ODS Framework Library",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -26,6 +26,7 @@
     "node": "22.19.0"
   },
   "dependencies": {
+    "@nrfcloud/ts-json-schema-transformer": "^3.1.1",
     "@tsoa/runtime": "^6.6.0",
     "@types/express": "^5.0.6",
     "@types/global-agent": "^3.0.0",
@@ -40,11 +41,10 @@
     "jsonrepair": "^3.4.1",
     "lz-ts": "^1.1.2",
     "mongodb": "^7.0.0",
-    "ods-common": "file:ods-common-1.0.0.tgz",
+    "ods-common": "file:ods-common-1.1.0.tgz",
     "swagger-ui-express": "^5.0.1",
     "tsoa": "^6.2.1",
     "typescript": "^5.8.2",
-    "typia": "^12.1.1",
     "undici": "^7.16.0",
     "uuid": "^13.0.0",
     "v8-sandbox": "^3.2.12"
