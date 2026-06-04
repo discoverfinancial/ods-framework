@@ -342,7 +342,8 @@ const appDocuments: Documents = {
 
 export class Ods extends DocMgr {
     public etl: ETL | undefined;
-    public serverDocCollection: any;
+    public statusDocCollection: any;
+    public lockCollection: any;
     public notebookvarCollection: any;
     public apikeyCollection: any;
     // public sandbox: Cluster;
@@ -381,7 +382,7 @@ export class Ods extends DocMgr {
     }
 
     constructor(args: OdsCreateArgs) {
-        console.log("Ods constructor() args=", args.userProfileService);
+        // console.log("Ods constructor() args=", args.userProfileService);
         super({
             appName: args.appName || dbApp,
             documents: {...appDocuments, ...args.documents},
@@ -435,7 +436,7 @@ export class Ods extends DocMgr {
      * @param next Next middleware function.
      */
     public allowCrossDomain(_req: express.Request, res: express.Response, next: express.NextFunction) {
-        console.log("ODS allowCrossDomain()")
+        // console.log("ODS allowCrossDomain()")
         let authRequest = false;
         if (_req.headers?.['access-control-request-headers']?.includes('authorization') || _req.headers?.authorization) {
             authRequest = true;
@@ -554,7 +555,7 @@ export class Ods extends DocMgr {
 
         const { error, value } = await sandbox.execute({ 
             code, 
-            timeout: 300000, 
+            timeout: data.timeout || 300000, 
             globals: { 
                 ctx: ctx,
                 parameters: data.parameters || {},
@@ -626,7 +627,7 @@ export class Ods extends DocMgr {
      * @returns {key: value} Object of all notebook vars with key = variable name
      */
     async getNotebookVars(notebookId: string) {
-        console.log(`getNotebookVars(${notebookId})`);
+        log.debug(`getNotebookVars(${notebookId})`);
         if (!notebookId) {
             return;
         }
@@ -651,7 +652,7 @@ export class Ods extends DocMgr {
 
         // If using database for notebook variables
         const pc = await this.getNotebookvarCollection();
-        const docs = await pc.find({notebook: notebookId}, {projection: {name:1}}).toArray();
+        const docs = await pc.find({notebook: notebookId, snapshotName: {$exists: false}}, {projection: {name:1}}).toArray();
         if (docs && docs.length>0) {
             const r:any = {};
             for (const doc of docs) {
@@ -711,6 +712,98 @@ export class Ods extends DocMgr {
         return null;
     }
 
+    /**
+     * Get all notebook variable names for a snapshot
+     * 
+     * @param notebookId 
+     * @returns {key: value} Object of all notebook vars with key = variable name
+     */
+    async getNotebookVarsSnapshotVars(notebookId: string, snapshotName: string) {
+        log.debug(`getNotebookVarsSnapshotVars(${notebookId}, ${snapshotName})`);
+        if (!notebookId || !snapshotName) {
+            return;
+        }
+
+        // If using file system for notebook variables
+        if (useNotebookVarsInFile) {
+            try {
+                const dir = `${DATA_DIR}/notebook/${notebookId}/snapshots/${snapshotName}`;
+                const names = fs.readdirSync(dir);
+                const r:string[] = [];
+                for (const name of names) {
+                    if (name.endsWith(".json")) {
+                        r.push(name.substring(0, name.length-5));
+                    }
+                }
+                return r;
+            } catch (err) {
+                console.error("Error reading notebook variables:", err);
+                throw new Error(`Error reading notebook variables for notebook ${notebookId}: ${err}`);
+            }
+        }
+
+        // If using database for notebook variables
+        const pc = await this.getNotebookvarCollection();
+        const docs = await pc.find({notebook: notebookId, snapshotName: snapshotName}, {projection: {name:1}}).toArray();
+        if (docs && docs.length>0) {
+            const r:any = {};
+            for (const doc of docs) {
+                r[doc.name] = true;
+            }
+            const names = Object.keys(r);
+            return names;
+        }
+    }
+
+    /**
+     * Get notebook variable from a snapshot
+     * 
+     * @param notebookId The notebook id.
+     * @param snapshotName The snapshot name.
+     * @param name The variable name.
+     * @returns 
+     */
+    async getNotebookVarsSnapshotVar(notebookId: string, snapshotName: string, name: string) {
+        log.debug(`getNotebookVarsSnapshotVar(${notebookId}, ${snapshotName}, ${name})`);
+        if (!notebookId || !name) {
+            return null;
+        }
+
+        // If using file system for notebook variables
+        if (useNotebookVarsInFile) {
+            try {
+                const dir = `${DATA_DIR}/notebook/${notebookId}/snapshots/${snapshotName}`;
+                if (fs.existsSync(`${dir}/${name}.json`)) {
+                    const r = fs.readFileSync(`${dir}/${name}.json`);
+                    if (r && r.length > 0) {
+                        return JSON.parse(r.toString());
+                    }
+                }
+            } catch (err) {
+                log.err("Error reading notebook variable:", err);
+                throw new Error(`Error reading notebook variable ${name} for notebook ${notebookId}: ${err}`);
+            }
+            return null;
+        }
+
+        // If using database for notebook variables
+        const pc = await this.getNotebookvarCollection();
+        const docs = await pc.find({notebook: notebookId, name: name, snapshotName: snapshotName}).toArray();
+
+        if (docs && docs.length>0) {
+            if (docs[0].type == "array") {
+                const r:any[] = [];
+                for (const doc of docs) {
+                    for (const item of doc.value) {
+                        r.push(item);
+                    }
+                }
+                return r;
+            }
+            return docs[0].value;
+        }
+        return null;
+    }
 
     /**
      * Save notebook variable
@@ -736,7 +829,7 @@ export class Ods extends DocMgr {
                 }
                 fs.writeFileSync(`${dir}/${name}.json`, value ? JSON.stringify(value, null, 0) : "");
                 const done = Date.now();
-                console.log(` -- setNotebookVar wrote file ${name}.json in ${done - start} ms`);
+                log.debug(` -- setNotebookVar wrote file ${name}.json in ${done - start} ms`);
                 return value;
             } catch (err) {
                 log.err("Error writing notebook variable to file:", err);
@@ -773,7 +866,7 @@ export class Ods extends DocMgr {
                 }
             }
             const done = Date.now();
-            console.log(` -- setNotebookVar wrote ${name} to database in ${done - start} ms`);
+            log.debug(` -- setNotebookVar wrote ${name} to database in ${done - start} ms`);
             return value;
         }
         else {
@@ -784,7 +877,7 @@ export class Ods extends DocMgr {
                 value: value,
             })
             const done = Date.now();
-            console.log(` -- setNotebookVar wrote ${name} to database in ${done - start} ms`);
+            log.debug(` -- setNotebookVar wrote ${name} to database in ${done - start} ms`);
             return doc;
         }
     }
@@ -952,7 +1045,7 @@ export class Ods extends DocMgr {
      * @param snapshotName 
      * @returns 
      */
-    async saveNotebookVarsSnapshot(notebookId: string, snapshotName: string, snapshotDescription: string) {
+    async saveNotebookVarsSnapshot(notebookId: string, snapshotName: string, snapshotDescription: string, notebook: string) {
         log.debug(`saveNotebookVarsSnapshot(${notebookId}, ${snapshotName}, ${snapshotDescription})`);
         if (!notebookId || !snapshotName) {
             return null;
@@ -978,6 +1071,9 @@ export class Ods extends DocMgr {
                     }
                 }
                 fs.writeFileSync(`${snapshotDir}/_description.txt`, snapshotDescription || "");
+                fs.writeFileSync(`${snapshotDir}/_notebook.txt`, notebook || "");
+                files.push("_description.txt");
+                files.push("_notebook.txt");
                 return files
             } catch (err) {
                 log.err(`Error saving snapshot ${snapshotName} for notebook ${notebookId}`, err);
@@ -1007,6 +1103,21 @@ export class Ods extends DocMgr {
                     r.push(name);
                 }
             }
+            // Add notebook content as a special variable in the snapshot
+            if (notebook) {
+                const name = "_notebook";
+                const d:any = {
+                    notebook: notebookId,
+                    name: name,
+                    snapshotName: snapshotName,
+                    snapshotDescription: snapshotDescription,
+                    type: "var",
+                    value: notebook,
+                }
+                const doc2 = await pc.insertOne(d);
+                r.push(name)
+            }
+
             return r;
         }
         return null;
@@ -1361,11 +1472,11 @@ export class Ods extends DocMgr {
             odsUrl = "http://localhost:" + port;
         }
         for (const collectionNameQuery of namesArray) {
-            console.log('collectionNameQuery =',collectionNameQuery);
+            log.debug('collectionNameQuery =',collectionNameQuery);
             await this.setStatus("Importing Collection", `${collectionNameQuery.name} from ${odsUrl}`, "");
             const r = await this.importCollection(ctx, collectionNameQuery, odsUrl, user, pass, encoding, alwaysUpdate, deleteCollection);
             await this.setStatus("Done Importing Collection", `${collectionNameQuery.name} from ${odsUrl}`, `Number of documents imported = ${r}`);
-            console.log("Result from importCollection =", r);
+            log.debug("Result from importCollection =", r);
         }
     }
 
@@ -1602,11 +1713,11 @@ export class Ods extends DocMgr {
      * Get the MongoDB server collection.
      * @returns {Promise<any>} The server document collection.
      */
-    public async getServerDocCollection() {
-        if (!this.serverDocCollection) {
-            this.serverDocCollection = await this.getCollection(dbApp + ".server.doc");
+    public async getStatusDocCollection() {
+        if (!this.statusDocCollection) {
+            this.statusDocCollection = await this.getCollection(dbApp + ".server.doc");
         }
-        return this.serverDocCollection;
+        return this.statusDocCollection;
     }
     
     /**
@@ -1615,8 +1726,19 @@ export class Ods extends DocMgr {
      * @returns {Promise<any>} Status document.
      */
     public async getStatus(id="appStatus") {
-        const pc = await this.getServerDocCollection();
+        const pc = await this.getStatusDocCollection();
         const serverStatus = await pc.findOne({_id: id});
+        return serverStatus;
+    }
+
+    /**
+     * Get the status of all.
+     * @param None
+     * @returns {Promise<any>} Array of status documents.
+     */
+    public async getStatusAll() {
+        const pc = await this.getStatusDocCollection();
+        const serverStatus = await pc.find().toArray();
         return serverStatus;
     }
 
@@ -1639,7 +1761,7 @@ export class Ods extends DocMgr {
      * @returns {Promise<any>} Update result.
      */
     public async setStatus(status: string | null, command?: string, comment?: string, id="appStatus") {
-        const pc = await this.getServerDocCollection();
+        const pc = await this.getStatusDocCollection();
         const r = await pc.updateOne({_id: id}, {$set: {status: status, command: command || "", comment: comment || "", dateUpdated: Date.now()}}, {upsert: true})
         return r;
     }
@@ -1651,7 +1773,7 @@ export class Ods extends DocMgr {
      * @returns {Promise<any>} Update result.
      */
     public async setStatusComment(comment?: string, id="appStatus") {
-        const pc = await this.getServerDocCollection();
+        const pc = await this.getStatusDocCollection();
         const r = await pc.updateOne({_id: id}, {$set: {comment: comment || "", dateUpdated: Date.now()}}, {upsert: true})
         return r;
     }
@@ -1667,21 +1789,32 @@ export class Ods extends DocMgr {
     }
 
     /**
+     * Get the MongoDB lock collection.
+     * @returns {Promise<any>} The server document collection.
+     */
+    public async getLockCollection() {
+        if (!this.lockCollection) {
+            this.lockCollection = await this.getCollection(dbApp + ".lock.doc");
+        }
+        return this.lockCollection;
+    }
+
+    /**
      * Acquire a lock for a given name.
      * @param name Lock name.
      * @returns {Promise<any>} Lock document or null.
      */
     public async getLock(name: string) {
-        console.log(`getLock(${name})`)
-        const pc = await this.getServerDocCollection();
+        log.debug(`getLock(${name})`)
+        const pc = await this.getLockCollection();
         try {
             const r = await pc.findOneAndUpdate( {
-                _id: `lock_${name}`,
+                _id: name,
                 dateUpdated: 0,
             },
             {
                 $set: {
-                    _id: `lock_${name}`,
+                    _id: name,
                     dateUpdated: Date.now(),
                 }
             },
@@ -1703,9 +1836,21 @@ export class Ods extends DocMgr {
      * @returns {Promise<any>} Lock document.
      */
     public async checkLock(name: string) {
-        console.log(`checkLock(${name})`)
-        const pc = await this.getServerDocCollection();
-        const r = await pc.findOne({_id: `lock_${name}`});
+        // console.log(`checkLock(${name})`)
+        const pc = await this.getLockCollection();
+        const r = await pc.findOne({_id: name});
+        return r;
+    }
+
+    /**
+     * Get all locks.
+     * @param name Lock name.
+     * @returns {Promise<any>} Array of locks.
+     */
+    public async getLockAll() {
+        // console.log(`getLockAll()`)
+        const pc = await this.getLockCollection();
+        const r = await pc.find().toArray();
         return r;
     }
 
@@ -1715,50 +1860,44 @@ export class Ods extends DocMgr {
      * @returns {Promise<any>} Update result.
      */
     public async clearLock(name: string) {
-        console.log(`clearLock(${name})`)
-        const pc = await this.getServerDocCollection();
-        const r = await pc.updateOne({_id: `lock_${name}`}, {$set: {dateUpdated: 0}}, {upsert: true});
+        log.debug(`clearLock(${name})`)
+        const pc = await this.getLockCollection();
+        const r = await pc.updateOne({_id: name}, {$set: {dateUpdated: 0}}, {upsert: true});
         return r;
     }
 }
 
 // Run timer to reset status if not changed after 20 min
 setInterval(async function() {
-    log.debug("Managing status")
+    // log.debug("Managing status")
     const now = Date.now();
     const resetTime = now - 20*60000;
-    console.log(" -- ResetTime =", formatDateTime(resetTime) );
-    const mgr = Ods.getInstance();
-    const keys = ["appStatus", ETL.lockName];
-    for (const key of keys) {
-        console.log(" -- Looking at status for ", key);
+    const lockResetTime = now - 5*60000;
+    // console.log(" -- lockResetTime =", formatDateTime(lockResetTime) );
+    // console.log(" -- ResetTime =", formatDateTime(resetTime) );
+    const mgr = Ods.getInstance(); // Instead of ETL.lockName we need a key for each (4) cron job.
+
+    const locks = await mgr.getLockAll();
+    for (const lock of locks) {
+        // console.log(" -- lock =", lock); // lock = { _id: 'lock_etl', dateUpdated: 0 }
+        const lockName = lock._id;
+        if (lock.dateUpdated < lockResetTime && lock.dateUpdated > 0) {
+            await mgr.clearLock(lockName);
+            // console.log(" -- Clearing lock: ", lock);
+            await mgr.etl?.writeLog(mgr.getAdminContext(), "Clearing lock: " + JSON.stringify(lock));
+        }
+    }
+    const statusKeys = await mgr.getStatusAll();
+    for (const key of statusKeys) { // Separate for loops and array for status keys and locks NEED TO ADD "appStatus"
+        // console.log(" -- Looking at status for ", key);
         const status = await mgr.getStatus(key);
         if (status && status.status) {
-            console.log(" -- Looking at status: ", status, formatDateTime(status.dateUpdated));
+            // console.log(" -- Looking at status: ", status, formatDateTime(status.dateUpdated));
             if ((status.status.toLowerCase() == "idle")  || 
                 (status.dateUpdated < resetTime)) {
-                log.debug(" -- Clearing status: ", status);
+                // log.debug(" -- Clearing status: ", status);
                 await mgr.stop(key);
                 await mgr.etl?.writeLog(mgr.getAdminContext(), "Clearing status: " + JSON.stringify(status));
-
-                // If server status was cleared, then clear lock too
-                if (key == ETL.lockName) {
-                    const lock = await mgr.checkLock(ETL.lockName);
-                    await mgr.clearLock(ETL.lockName);
-                    log.debug(" -- Clearing lock: ", lock);
-                    await mgr.etl?.writeLog(mgr.getAdminContext(), "Clearing lock: " + JSON.stringify(lock));
-                }
-            }
-        }
-        // If no status for etl but lock is set, then clear it
-        else if (key == ETL.lockName) {
-            console.log(" -- Looking at lock for ", key)
-            const lock = await mgr.checkLock(ETL.lockName);
-            console.log(" -- lock =", lock); // lock = { _id: 'lock_etl', dateUpdated: 0 }
-            if (lock && lock.dateUpdated > 0) {
-                await mgr.clearLock(ETL.lockName);
-                console.log(" -- Clearing lock: ", lock);
-                await mgr.etl?.writeLog(mgr.getAdminContext(), "Clearing lock: " + JSON.stringify(lock));
             }
         }
     }
