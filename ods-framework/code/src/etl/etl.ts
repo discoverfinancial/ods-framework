@@ -49,9 +49,10 @@ export function stopExecution(prompt: string) {
 */
 
 const sleep = (delay:number) => new Promise((resolve) => setTimeout(resolve, delay))
+const cronJobEnabled:any = [false, false, false, false];
 
 export class ETL {
-    public static lockName = "etl";
+    public static lockNames = ["cronLock1", "cronLock2", "cronLock3", "cronLock4"]
 
     private static instance: ETL | undefined;
     mgr: Ods;
@@ -76,6 +77,20 @@ export class ETL {
     }
 
     /**
+     * Enable or disable a cron job to run when triggered. This can be used to control whether a cron job should run or not.
+     * For example, if you want to temporarily disable a cron job, you can call this function with the cron job number to enable it again when needed.
+     * 
+     * @param cronJobNumber The cron job number (0, 1, 2, 3)
+     * @param enabled Whether the cron job should be enabled or not
+     */
+    public static setCronJobEnabled(cronJobNumber: number, enabled: boolean) {
+        if (cronJobNumber < 0 || cronJobNumber > 3) {
+            throw new Error(`Invalid cron job number: ${cronJobNumber}`);
+        }
+        cronJobEnabled[cronJobNumber] = enabled;
+    }
+
+    /**
      * Get the instance of DocMgr.
      *
      * @returns {DocMgr} The instance of DocMgr
@@ -93,6 +108,8 @@ export class ETL {
                 console.log("CRON_JOB_1 = ", CRON_JOB_1)
                 console.log("CRON_JOB_2 = ", CRON_JOB_2);
                 console.log("CRON_JOB_3 = ", CRON_JOB_3)
+                const instance = process.env["HOSTNAME"]? process.env["HOSTNAME"]+":" : "" + process.env["PORT"];
+                console.log("Instance: ", instance);
                 if (CRON_JOB_0) {
                     const name = "cronJob0";
                     const cronJob0 = new Cron(
@@ -102,81 +119,78 @@ export class ETL {
                                 log.info(`Error running Job ${name}: `, e);
                             },
                             protect: (job) => {
-                                log.info(`Job ${name} at ${new Date().toISOString()} was blocked by call started at ${job?.currentRun()?.toISOString()}`);
+                                log.info(`Job ${name} at ${new Date().toLocaleString()} was blocked by call started at ${job?.currentRun()?.toLocaleString()}`);
                             },
                         },
                         async (job: Cron) => {
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()}`);
                             const ctx = mgr.getAdminContext();
-
-                            // If server is busy, then skip
-                            let serverStatus = await etl.getServerStatus();
-                            if (serverStatus && ![STATUS.STOPPED, STATUS.IDLE].includes(serverStatus)) { 
-                                await etl.writeLog(ctx, `Server is busy so can't run job ${name}`);
+                            if (!cronJobEnabled[0]) {
+                                await etl.writeLog(ctx, `Job ${name} is disabled`);
                                 return;
                             }
+                            console.log(`Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()}`);
+
 
                             // Try to get lock
-                            let lock = await mgr.getLock(ETL.lockName);
+                            let lock = await mgr.getLock(ETL.lockNames[0]);
+                            await etl.writeLog(ctx, `lock for ${name} on ${instance}: ${JSON.stringify(lock)}`)
                             if (!lock) {
                                 console.log(`Failed to get lock - cancelling job`)
-                                await etl.writeLog(ctx,`Failed to get lock for ${name} - cancelling job`)
+                                await etl.writeLog(ctx,`Failed to get lock for ${name} on ${instance} - cancelling job`)
                             }
                             else {
-                                await etl.writeLog(ctx,`Got lock for ${name} - running job`)
+                                await etl.writeLog(ctx,`Got lock for ${name} on ${instance} - running job`)
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at start - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Start`)
                                     log.info(`Running user scripts`)
                                     await etl.runScriptsFromCron(ctx, "0", "start");
-                                    await etl.writeLog(ctx,`Run user scripts at start - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Done`)
                                 } catch (e) {
                                     log.info(`Error running user scripts at start:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at start - Error: ` + e)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at start", "Done");
 
                                 if (mgr.etlConfig.cronJob0Start) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob0Start(ctx, etl, "0", "start");
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at start:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at start", "Done");
                                 }
 
                                 if (mgr.etlConfig.cronJob0End) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob0End(ctx, etl, "0", "end");
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at end:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at end", "Done");
                                 }
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at end - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Start`)
                                     log.info(`Running user scripts at end`)
                                     await etl.runScriptsFromCron(ctx, "0", "end");
-                                    await etl.writeLog(ctx,`Run user scripts at end - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Done`)
                                 } catch (e) {
-                                    log.info(`Error running user scrdipts at end:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at end - Error: ` + e)
+                                    log.info(`Error running user scripts at end:` + e);
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at end", "Done");
 
-                                await mgr.clearLock(ETL.lockName)
+                                await mgr.clearLock(ETL.lockNames[0])
                             }
 
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()} finished at ${new Date().toISOString()}`);
+                            console.log(`Job ${name} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
                         }
                     )
                 }
@@ -189,81 +203,77 @@ export class ETL {
                                 log.info(`Error running Job ${name}: `, e);
                             },
                             protect: (job) => {
-                                log.info(`Job ${name} at ${new Date().toISOString()} was blocked by call started at ${job?.currentRun()?.toISOString()}`);
+                                log.info(`Job ${name} at ${new Date().toLocaleString()} was blocked by call started at ${job?.currentRun()?.toLocaleString()}`);
                             },
                         },
                         async (job: Cron) => {
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()}`);
                             const ctx = mgr.getAdminContext();
-
-                            // If server is busy, then skip
-                            let serverStatus = await etl.getServerStatus();
-                            if (serverStatus && ![STATUS.STOPPED, STATUS.IDLE].includes(serverStatus)) { 
-                                await etl.writeLog(ctx, `Server is busy so can't run job ${name}`);
+                            if (!cronJobEnabled[1]) {
+                                await etl.writeLog(ctx, `Job ${name} is disabled`);
                                 return;
                             }
+                            console.log(`Job ${name} started at ${job?.currentRun()?.toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()}`);
+
 
                             // Try to get lock
-                            let lock = await mgr.getLock(ETL.lockName);
+                            let lock = await mgr.getLock(ETL.lockNames[1]);
                             if (!lock) {
                                 console.log(`Failed to get lock - cancelling job`)
-                                await etl.writeLog(ctx,`Failed to get lock for ${name} - cancelling job`)
+                                await etl.writeLog(ctx,`Failed to get lock for ${name} on ${instance}- cancelling job`)
                             }
                             else {
-                                await etl.writeLog(ctx,`Got lock for ${name} - running job`)
+                                await etl.writeLog(ctx,`Got lock for ${name} on ${instance} - running job`)
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at start - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Start`)
                                     log.info(`Running user scripts`)
                                     await etl.runScriptsFromCron(ctx, "1", "start");
-                                    await etl.writeLog(ctx,`Run user scripts at start - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Done`)
                                 } catch (e) {
                                     log.info(`Error running user scripts at start:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at start - Error: ` + e)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at start", "Done");
 
                                 if (mgr.etlConfig.cronJob1Start) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob1Start(ctx, etl, "1", "start");
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at start:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at start", "Done");
                                 }
 
                                 if (mgr.etlConfig.cronJob1End) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob1End(ctx, etl, "1", "end");
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at end:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at end", "Done");
                                 }
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at end - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Start`)
                                     log.info(`Running user scripts at end`)
                                     await etl.runScriptsFromCron(ctx, "1", "end");
-                                    await etl.writeLog(ctx,`Run user scripts at end - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Done`)
                                 } catch (e) {
-                                    log.info(`Error running user scrdipts at end:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at end - Error: ` + e)
+                                    log.info(`Error running user scripts at end:` + e);
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at end", "Done");
 
-                                await mgr.clearLock(ETL.lockName)
+                                await mgr.clearLock(ETL.lockNames[1])
                             }
 
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()} finished at ${new Date().toISOString()}`);
+                            console.log(`Job ${name} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
                         }
                     )
                 }
@@ -277,81 +287,77 @@ export class ETL {
                                 log.info(`Error running Job ${name}: `, e);
                             },
                             protect: (job) => {
-                                log.info(`Job ${name} at ${new Date().toISOString()} was blocked by call started at ${job?.currentRun()?.toISOString()}`);
+                                log.info(`Job ${name} at ${new Date().toLocaleString()} was blocked by call started at ${job?.currentRun()?.toLocaleString()}`);
                             },
                         },
                         async (job: Cron) => {
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()}`);
                             const ctx = mgr.getAdminContext();
-
-                            // If server is busy, then skip
-                            let serverStatus = await etl.getServerStatus();
-                            if (serverStatus && ![STATUS.STOPPED, STATUS.IDLE].includes(serverStatus)) { 
-                                await etl.writeLog(ctx, `Server is busy so can't run job ${name}`);
+                            if (!cronJobEnabled[2]) {
+                                await etl.writeLog(ctx, `Job ${name} is disabled`);
                                 return;
                             }
+                            console.log(`Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()}`);
+
 
                             // Try to get lock
-                            let lock = await mgr.getLock(ETL.lockName);
+                            let lock = await mgr.getLock(ETL.lockNames[2]);
                             if (!lock) {
                                 console.log(`Failed to get lock - cancelling job`)
-                                await etl.writeLog(ctx,`Failed to get lock for ${name} - cancelling job`)
+                                await etl.writeLog(ctx,`Failed to get lock for ${name} on ${instance} - cancelling job`)
                             }
                             else {
-                                await etl.writeLog(ctx,`Got lock for ${name} - running job`)
+                                await etl.writeLog(ctx,`Got lock for ${name} on ${instance} - running job`)
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at start - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Start`)
                                     log.info(`Running user scripts`)
                                     await etl.runScriptsFromCron(ctx, "3", "start");
-                                    await etl.writeLog(ctx,`Run user scripts at start - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Done`)
                                 } catch (e) {
                                     log.info(`Error running user scripts at start:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at start - Error: ` + e)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at start", "Done");
 
                                 if (mgr.etlConfig.cronJob2Start) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob2Start(ctx, etl, "2", "start");
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at start:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at start", "Done");
                                 }
 
                                 if (mgr.etlConfig.cronJob2End) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob2End(ctx, etl, "2", "end");
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at end:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at end", "Done");
                                 }
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at end - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Start`)
                                     log.info(`Running user scripts at end`)
                                     await etl.runScriptsFromCron(ctx, "2", "end");
-                                    await etl.writeLog(ctx,`Run user scripts at end - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Done`)
                                 } catch (e) {
                                     log.info(`Error running user scrdipts at end:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at end - Error: ` + e)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at end", "Done");
 
-                                await mgr.clearLock(ETL.lockName)
+                                await mgr.clearLock(ETL.lockNames[2])
                             }
 
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()} finished at ${new Date().toISOString()}`);
+                            console.log(`Job ${name} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
                         }
                     )
                 }
@@ -365,81 +371,77 @@ export class ETL {
                                 log.info(`Error running Job ${name}: `, e);
                             },
                             protect: (job) => {
-                                log.info(`Job ${name} at ${new Date().toISOString()} was blocked by call started at ${job?.currentRun()?.toISOString()}`);
+                                log.info(`Job ${name} at ${new Date().toLocaleString()} was blocked by call started at ${job?.currentRun()?.toLocaleString()}`);
                             },
                         },
                         async (job: Cron) => {
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()}`);
                             const ctx = mgr.getAdminContext();
-
-                            // If server is busy, then skip
-                            let serverStatus = await etl.getServerStatus();
-                            if (serverStatus && ![STATUS.STOPPED, STATUS.IDLE].includes(serverStatus)) { 
-                                await etl.writeLog(ctx, `Server is busy so can't run job ${name}`);
+                            if (!cronJobEnabled[3]) {
+                                await etl.writeLog(ctx, `Job ${name} is disabled`);
                                 return;
                             }
+                            console.log(`Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()}`);
+
 
                             // Try to get lock
-                            let lock = await mgr.getLock(ETL.lockName);
+                            let lock = await mgr.getLock(ETL.lockNames[3]);
                             if (!lock) {
                                 console.log(`Failed to get lock - cancelling job`)
-                                await etl.writeLog(ctx,`Failed to get lock for ${name} - cancelling job`)
+                                await etl.writeLog(ctx,`Failed to get lock for ${name} on ${instance} - cancelling job`)
                             }
                             else {
-                                await etl.writeLog(ctx,`Got lock for ${name} - running job`)
+                                await etl.writeLog(ctx,`Got lock for ${name} on ${instance} - running job`)
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at start - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Start`)
                                     log.info(`Running user scripts`)
                                     await etl.runScriptsFromCron(ctx, "3", "start");
-                                    await etl.writeLog(ctx,`Run user scripts at start - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Done`)
                                 } catch (e) {
                                     log.info(`Error running user scripts at start:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at start - Error: ` + e)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at start - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at start", "Done");
 
                                 if (mgr.etlConfig.cronJob3Start) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob3Start(ctx, etl, "3", "start");
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at start:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at start - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at start - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at start", "Done");
                                 }
 
                                 if (mgr.etlConfig.cronJob3End) {
                                     try {
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Start`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Start`)
                                         log.info(`Running ods scripts`)
                                         await mgr.etlConfig.cronJob3End(ctx, etl, "3", "end");
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Done`)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Done`)
                                     } catch (e) {
                                         log.info(`Error running ods scripts at end:` + e);
-                                        await etl.writeLog(ctx,`Run ods scripts at end - Error: ` + e)
+                                        await etl.writeLog(ctx,`Run ods scripts for ${name} on ${instance} at end - Error: ` + e)
                                     }
-                                    etl.setStatus(STATUS.IDLE, "Run ods scripts at end", "Done");
                                 }
 
                                 try {
-                                    await etl.writeLog(ctx,`Run user scripts at end - Start`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Start`)
                                     log.info(`Running user scripts at end`)
                                     await etl.runScriptsFromCron(ctx, "3", "end");
-                                    await etl.writeLog(ctx,`Run user scripts at end - Done`)
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Done`)
                                 } catch (e) {
-                                    log.info(`Error running user scrdipts at end:` + e);
-                                    await etl.writeLog(ctx,`Run user scripts at end - Error: ` + e)
+                                    log.info(`Error running user scripts at end:` + e);
+                                    await etl.writeLog(ctx,`Run user scripts for ${name} on ${instance} at end - Error: ` + e)
                                 }
-                                etl.setStatus(STATUS.IDLE, "Run user scripts at end", "Done");
 
-                                await mgr.clearLock(ETL.lockName)
+                                await mgr.clearLock(ETL.lockNames[3])
                             }
 
-                            console.log(`Job ${name} started at ${job?.currentRun()?.toISOString()} finished at ${new Date().toISOString()}`);
+                            console.log(`Job ${name} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
+                            await etl.writeLog(ctx, `Job ${name} on ${instance} started at ${job?.currentRun()?.toLocaleString()} finished at ${new Date().toLocaleString()}`);
                         }
                     )
                 }
@@ -505,53 +507,7 @@ export class ETL {
         }
     }
 
-    /**
-     * Get the status of the ETL process
-     * 
-     * @returns 
-     */
-    public async getStatus() {
-        return await this.mgr.getStatus(ETL.lockName);
-    }
 
-    /**
-     * Get the server status field
-     * 
-     * @returns 
-     */
-    public async getServerStatus() {
-        const serverStatus = await this.getStatus();
-        return serverStatus?.status;
-    }
-
-    /**
-     * Set the status of the ETL process
-     * 
-     * @param status 
-     * @param command
-     * @param comment 
-     * @returns 
-     */
-    public async setStatus(status: string | null, command?: string, comment?: string) {
-        return await this.mgr.setStatus(status, command, comment, ETL.lockName);
-    }
-
-    /**
-     * Set the status comment of the ETL process
-     * 
-     * @param comment 
-     */
-    public async setStatusComment(comment?: string) {
-        return await this.mgr.setStatusComment(comment, ETL.lockName);
-    }
-
-    /**
-     * Stop currently running ETL process
-     */
-    public async stop() {
-        log.debug(">>>> STOP")
-        await this.mgr.stop(ETL.lockName);
-    }
 
     /**
      * Run user scripts that are assigned to run periodically during a specific cron job.
