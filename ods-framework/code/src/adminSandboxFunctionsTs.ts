@@ -153,9 +153,9 @@ define("getLogs", async ([], { respond, fail }) => {
     }
 });
 
-define("getStatus", async ([], { respond, fail }) => {
+define("getStatus", async ([name], { respond, fail }) => {
     try {
-        const r = await global.etl.getStatus();
+        const r = await global.mgr.getStatus(name);
         respond(r);
     } catch (e) {
         console.log(e);
@@ -219,6 +219,41 @@ define("deleteNotebookVar", async ([notebookId, name], { respond, fail }) => {
     try {
         await global.mgr.deleteNotebookVar(notebookId, name);
         respond();
+    } catch (e) {
+        console.log(e);
+        fail(e);
+    }
+});
+
+define("getNotebookVarsSnapshotNames", async ([notebookId], { respond, fail }) => {
+    // console.log("getNotebookVarsSnapshotNames name=", name)
+    try {
+        const r = await global.mgr.getNotebookVarsSnapshotNames(notebookId);
+        // console.log(" -- found var r=", r);
+        respond(r);
+    } catch (e) {
+        console.log(e);
+        fail(e);
+    }
+});
+
+define("getNotebookVarsSnapshotVar", async ([notebookId, snapshotName, name], { respond, fail }) => {
+    // console.log("getNotebookVarsSnapshotVar name=", name)
+    try {
+        const r = await global.mgr.getNotebookVarsSnapshotVar(notebookId, snapshotName, name);
+        // console.log(" -- found var r=", r);
+        respond(r);
+    } catch (e) {
+        console.log(e);
+        fail(e);
+    }
+});
+
+define("getNotebookVarsSnapshotVars", async ([notebookId, snapshotName], { respond, fail }) => {
+    // console.log("getNotebookVarsSnapshotVars")
+    try {
+        const r = await global.mgr.getNotebookVarsSnapshotVars(notebookId, snapshotName);
+        respond(r);
     } catch (e) {
         console.log(e);
         fail(e);
@@ -291,20 +326,20 @@ define("deleteLog", async ([id], { respond, fail }) => {
     }
 });
 
-define("setStatus", async ([status, command, comment], { respond, fail }) => {
+define("setStatus", async ([name, status, command, comment], { respond, fail }) => {
     try {
         assertIsAdmin();
-        const r = await global.etl.setStatus(status, command, comment);
+        const r = await global.mgr.setStatus(name, status, command, comment);
         respond(r);
     } catch (e) {
         console.log(e);
         fail(e);
     }
 });
-define("setStatusComment", async ([comment], { respond, fail }) => {
+define("setStatusComment", async ([name, comment], { respond, fail }) => {
     try {
         assertIsAdmin();
-        const r = await global.etl.setStatusComment(comment);
+        const r = await global.mgr.setStatusComment(name, comment);
         respond(r);
     } catch (e) {
         console.log(e);
@@ -312,10 +347,10 @@ define("setStatusComment", async ([comment], { respond, fail }) => {
     }
 });
 
-define("stop", async ([], { respond, fail }) => {
+define("stop", async ([name], { respond, fail }) => {
     try {
         assertIsAdmin();
-        const r = await global.etl.stop();
+        const r = await global.mgr.stop(name);
         respond(r);
     } catch (e) {
         console.log(e);
